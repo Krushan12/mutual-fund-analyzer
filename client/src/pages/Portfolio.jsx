@@ -1,29 +1,51 @@
 import React, { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
 import { Bar, Line } from 'react-chartjs-2'
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend } from 'chart.js'
 import axios from 'axios'
+import { useAuth } from '../context/AuthContext'
+import Spinner from '../components/Spinner'
 import './Portfolio.css'
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+)
 
 const Portfolio = () => {
   const { id } = useParams()
+  const { currentUser, loading: authLoading } = useAuth()
   const [portfolio, setPortfolio] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const fetchPortfolio = async () => {
-      try {
-        const res = await axios.get(`/api/portfolios/${id}`)
-        setPortfolio(res.data)
-        setLoading(false)
-      } catch (err) {
-        setError(err.message)
-        setLoading(false)
+    // Only fetch portfolio data if user is authenticated
+    if (!authLoading && currentUser) {
+      const fetchPortfolio = async () => {
+        try {
+          setLoading(true)
+          const res = await axios.get(`http://localhost:5000/api/portfolios/${id}`)
+          setPortfolio(res.data)
+          setLoading(false)
+        } catch (err) {
+          console.error('Error fetching portfolio:', err)
+          setError(err.response?.data?.msg || 'Failed to load portfolio')
+          setLoading(false)
+        }
       }
-    }
 
-    fetchPortfolio()
-  }, [id])
+      fetchPortfolio()
+    }
+  }, [id, currentUser, authLoading])
 
   if (loading) return <Spinner />
 
@@ -43,13 +65,27 @@ const Portfolio = () => {
         <div className="portfolio-card">
           <h2>Asset Allocation</h2>
           <div className="chart-container">
-            <Bar data={getAllocationData(portfolio)} />
+            <Bar 
+              data={getAllocationData(portfolio)} 
+              options={{
+                responsive: true,
+                maintainAspectRatio: false
+              }}
+              id="allocation-chart"
+            />
           </div>
         </div>
         <div className="portfolio-card">
           <h2>Performance</h2>
           <div className="chart-container">
-            <Line data={getPerformanceData(portfolio)} />
+            <Line 
+              data={getPerformanceData(portfolio)} 
+              options={{
+                responsive: true,
+                maintainAspectRatio: false
+              }}
+              id="performance-chart"
+            />
           </div>
         </div>
       </div>

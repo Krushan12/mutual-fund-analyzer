@@ -16,6 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/portfolios', require('./routes/portfolios'));
 app.use('/api/analyze', require('./routes/analyze'));
+app.use('/api/mutual-funds', require('./routes/mutualFunds'));
 
 // Test Route
 app.get('/api/test', (req, res) => {

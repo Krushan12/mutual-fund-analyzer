@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 import Spinner from '../components/Spinner';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 
 // Register Chart.js components
@@ -13,12 +14,14 @@ ChartJS.register(
   BarElement,
   PointElement,
   LineElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend
 );
 
 const Dashboard = () => {
+  const { currentUser, loading: authLoading } = useAuth();
   const [portfolios, setPortfolios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,28 +31,31 @@ const Dashboard = () => {
 
   // Fetch all portfolios
   useEffect(() => {
-    const fetchPortfolios = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get('/api/portfolios');
-        setPortfolios(Array.isArray(res.data) ? res.data : []);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching portfolios:', err);
-        setError(err.response?.data?.msg || 'Failed to load portfolios');
-        setPortfolios([]);
-        setLoading(false);
-      }
-    };
+    // Only fetch portfolios if user is authenticated
+    if (!authLoading && currentUser) {
+      const fetchPortfolios = async () => {
+        try {
+          setLoading(true);
+          const res = await axios.get('http://localhost:5000/api/portfolios');
+          setPortfolios(Array.isArray(res.data) ? res.data : []);
+          setLoading(false);
+        } catch (err) {
+          console.error('Error fetching portfolios:', err);
+          setError(err.response?.data?.msg || 'Failed to load portfolios');
+          setPortfolios([]);
+          setLoading(false);
+        }
+      };
 
-    fetchPortfolios();
-  }, []);
+      fetchPortfolios();
+    }
+  }, [currentUser, authLoading]);
 
   const handleAddPortfolio = async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
-      const res = await axios.post('/api/portfolios', newPortfolio);
+      const res = await axios.post('http://localhost:5000/api/portfolios', newPortfolio);
       setPortfolios([...portfolios, res.data]);
       setNewPortfolio({ name: '', description: '' });
       setShowAddPortfolio(false);
@@ -208,9 +214,15 @@ const Dashboard = () => {
                 
                 <div className="portfolio-summary">
                   <div className="chart-container">
-                    <Pie data={getPortfolioChartData(portfolio)} options={{ 
-                      plugins: { legend: { display: false } } 
-                    }} />
+                    <Pie 
+                      data={getPortfolioChartData(portfolio)} 
+                      options={{ 
+                        plugins: { legend: { display: false } },
+                        responsive: true,
+                        maintainAspectRatio: false
+                      }}
+                      id={`portfolio-chart-${portfolio.id}`} // Add unique ID
+                    />
                   </div>
                   
                   <div className="stats">

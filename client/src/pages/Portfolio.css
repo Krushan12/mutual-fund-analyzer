@@ -1,0 +1,66 @@
+.portfolio {
+    padding: 2rem 0;
+  }
+  
+  .portfolio-header {
+    margin-bottom: 2rem;
+  }
+  
+  .portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+  
+  .portfolio-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+  }
+  
+  .portfolio-card h2 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+  }
+  
+  .chart-container {
+    height: 300px;
+    position: relative;
+  }
+  
+  .holdings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+  }
+  
+  .holdings-table th,
+  .holdings-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .holdings-table th {
+    background-color: var(--light-color);
+    font-weight: 600;
+  }
+  
+  .text-success {
+    color: var(--success-color);
+  }
+  
+  .text-danger {
+    color: var(--danger-color);
+  }
+  
+  .error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 2rem auto;
+    max-width: 600px;
+  }

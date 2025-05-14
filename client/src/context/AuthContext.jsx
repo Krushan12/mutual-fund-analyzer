@@ -62,11 +62,10 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', token);
       
       // Set token in axios headers
-      axios.defaults.headers.common['x-auth-token'] = token;
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setAuthToken(token);
       
       // Fetch user data
-      const userRes = await axios.get('/api/auth/user');
+      const userRes = await apiClient.get('/auth/user');
       setCurrentUser(userRes.data);
       
       return true;
@@ -93,11 +92,10 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', token);
       
       // Set token in axios headers
-      axios.defaults.headers.common['x-auth-token'] = token;
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setAuthToken(token);
       
       // Fetch user data
-      const userRes = await axios.get('/api/auth/user');
+      const userRes = await apiClient.get('/auth/user');
       setCurrentUser(userRes.data);
       
       return true;

@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { Bar, Line, Pie, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Title, Tooltip, Legend } from 'chart.js'
-import axios from 'axios'
 import { useAuth } from '../context/AuthContext'
 import { getFundDetails } from '../api/mutualFunds'
+import { apiClient } from '../api/axiosConfig'
 import Spinner from '../components/Spinner'
 import './Portfolio.css'
 
@@ -39,11 +39,27 @@ const Portfolio = () => {
         const fundData = await getFundDetails(id, duration)
         setFund(fundData)
         
-        // Only fetch portfolio analysis data if user is authenticated
+        // Check if user is authenticated and has portfolios
         if (currentUser) {
           try {
-            const analysisRes = await axios.get(`/api/analyze/portfolio/${id}`)
-            setPortfolioAnalysis(analysisRes.data)
+            // First, get the user's portfolios to check if this fund is in any of them
+            const portfoliosRes = await apiClient.get('/portfolios')
+            const portfolios = portfoliosRes.data
+            
+            // Find portfolios that contain this fund
+            const matchingPortfolios = portfolios.filter(portfolio => 
+              portfolio.holdings.some(holding => holding.schemeCode === id)
+            )
+            
+            // If this fund is in at least one portfolio, get analysis for the first one
+            if (matchingPortfolios.length > 0) {
+              const portfolioId = matchingPortfolios[0].id
+              const analysisRes = await apiClient.get(`/analyze/portfolio/${portfolioId}`)
+              setPortfolioAnalysis(analysisRes.data)
+            } else {
+              // If no matching portfolio, we'll just show the fund data without analysis
+              console.log('This fund is not in any of your portfolios')
+            }
           } catch (analysisErr) {
             console.error('Error fetching portfolio analysis:', analysisErr)
             // If portfolio analysis fails, we can still show the fund data

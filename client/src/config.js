@@ -1,10 +1,9 @@
 // Configuration for different environments
 const config = {
   // API URLs
-  // For now, we'll use a direct approach to bypass CORS in production
-  // In a real production environment, you should properly configure CORS on your server
+  // Using the deployed backend URL
   apiUrl: process.env.NODE_ENV === 'production' 
-    ? '/api' // Use relative path to avoid CORS in production
+    ? 'https://mutual-fund-analyzer.onrender.com/api' // Use deployed backend URL
     : 'http://localhost:5000/api',
   
   // External API URLs

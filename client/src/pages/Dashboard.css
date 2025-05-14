@@ -60,6 +60,26 @@
   animation: slideDown 0.3s ease-out;
 }
 
+.dashboard-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.dashboard-title {
+  font-size: 2.5rem;
+  color: #2c3e50;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.dashboard-subtitle {
+  font-size: 1.2rem;
+  color: #7f8c8d;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;

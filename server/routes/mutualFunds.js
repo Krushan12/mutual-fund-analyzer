@@ -1,8 +1,84 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { MutualFund } = require('../models');
 const auth = require('../middleware/auth');
+const mutualFundApi = require('../middleware/mutualFundApi');
+
+// @route   GET api/mutual-funds/top10
+// @desc    Get top 10 performing mutual funds
+// @access  Public
+router.get('/top10', async (req, res, next) => {
+  try {
+    console.log('Fetching top 10 mutual funds directly from API');
+    
+    // Direct approach: get all funds and select 10 random ones
+    const response = await axios.get('https://api.mfapi.in/mf');
+    const allFunds = response.data;
+    
+    // Select 10 random funds
+    const funds = [];
+    const totalFunds = allFunds.length;
+    const numFunds = Math.min(10, totalFunds);
+    
+    // Create a set to ensure we don't select the same fund twice
+    const selectedIndices = new Set();
+    
+    while (selectedIndices.size < numFunds) {
+      const randomIndex = Math.floor(Math.random() * totalFunds);
+      if (!selectedIndices.has(randomIndex)) {
+        selectedIndices.add(randomIndex);
+        funds.push(allFunds[randomIndex]);
+      }
+    }
+    
+    // Process each fund to get full details
+    const processedFunds = [];
+    
+    for (const fund of funds) {
+      try {
+        // Get detailed fund info
+        const detailsResponse = await axios.get(`https://api.mfapi.in/mf/${fund.schemeCode}`);
+        const fundDetails = detailsResponse.data;
+        
+        // Prepare the fund data with all available info
+        const fundData = {
+          schemeCode: fund.schemeCode,
+          schemeName: fund.schemeName,
+          name: fund.schemeName,
+          category: fundDetails.meta?.scheme_category || 'N/A',
+          fundHouse: fundDetails.meta?.fund_house || 'N/A',
+          latestNav: fundDetails.data && fundDetails.data.length > 0 ? parseFloat(fundDetails.data[0].nav) : 0,
+          navDate: fundDetails.data && fundDetails.data.length > 0 ? fundDetails.data[0].date : null
+        };
+        
+        processedFunds.push(fundData);
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+      } catch (error) {
+        console.error(`Error processing fund ${fund.schemeCode}:`, error);
+        // Still add the fund with available info
+        processedFunds.push({
+          schemeCode: fund.schemeCode,
+          schemeName: fund.schemeName,
+          name: fund.schemeName,
+          category: 'N/A',
+          fundHouse: 'N/A',
+          latestNav: 0,
+          navDate: null
+        });
+      }
+    }
+    
+    // Return the processed funds
+    res.json(processedFunds);
+    
+  } catch (err) {
+    console.error('Error fetching top mutual funds:', err);
+    next(err);
+  }
+});
 
 // @route   GET api/mutual-funds/search
 // @desc    Search mutual funds
@@ -14,22 +90,7 @@ router.get('/search', async (req, res, next) => {
       return res.status(400).json({ msg: 'Search query is required' });
     }
 
-    // Search in our database first
-    const funds = await MutualFund.findAll({
-      where: {
-        name: {
-          [Op.iLike]: `%${query}%`
-        }
-      },
-      limit: 10
-    });
-
-    // If not found in database, fetch from external API
-    if (funds.length === 0) {
-      const response = await axios.get(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`);
-      return res.json(response.data);
-    }
-
+    const funds = await mutualFundApi.searchFunds(query, 10);
     res.json(funds);
   } catch (err) {
     console.error('Error searching mutual funds:', err);
@@ -42,83 +103,114 @@ router.get('/search', async (req, res, next) => {
 // @access  Public (or Private if you prefer)
 router.get('/:schemeCode', async (req, res, next) => {
   try {
+    console.log(`Fetching details for fund with scheme code: ${req.params.schemeCode}`);
     const { schemeCode } = req.params;
     const { duration = '1y' } = req.query; // 1m, 3m, 6m, 1y, 3y, 5y, 10y
 
-    // First check if we have recent data in our database
-    const fund = await MutualFund.findOne({
-      where: { schemeCode },
-      order: [['navDate', 'DESC']]
-    });
-
-    // If we have recent data (within 1 day), use it
-    if (fund && new Date() - new Date(fund.navDate) < 24 * 60 * 60 * 1000) {
-      // Get historical data from our database or fetch from API
-      const historicalData = await getHistoricalDataFromAPI(schemeCode, duration);
-      return res.json({
-        ...fund.toJSON(),
-        historicalData
-      });
+    // Direct API approach for reliable data
+    try {
+      // Fetch fund details and data in one go
+      const detailsResponse = await axios.get(`https://api.mfapi.in/mf/${schemeCode}`);
+      const fundDetails = detailsResponse.data;
+      
+      if (!fundDetails || !fundDetails.meta || !fundDetails.data || fundDetails.data.length === 0) {
+        return res.status(404).json({ error: 'Fund details not found' });
+      }
+      
+      // Extract and format the historical data for the specified duration
+      const durationMap = {
+        '1m': 30,
+        '3m': 90,
+        '6m': 180,
+        '1y': 365,
+        '3y': 365 * 3,
+        '5y': 365 * 5,
+        '10y': 365 * 10
+      };
+      
+      const dataCount = Math.min(durationMap[duration] || 365, fundDetails.data.length);
+      const historicalData = fundDetails.data
+        .slice(0, dataCount)
+        .map(item => ({
+          date: item.date,
+          nav: parseFloat(item.nav)
+        }));
+      
+      // Sort by date (ascending) for proper chart display
+      historicalData.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      console.log(`Got ${historicalData.length} historical data points for fund ${schemeCode}`);
+      
+      // Create the fund data object with all necessary fields
+      const fundData = {
+        schemeCode,
+        name: fundDetails.meta.scheme_name,
+        category: fundDetails.meta.scheme_category || 'N/A',
+        fundHouse: fundDetails.meta.fund_house || 'N/A',
+        latestNav: fundDetails.data[0] ? parseFloat(fundDetails.data[0].nav) : 0,
+        navDate: fundDetails.data[0] ? fundDetails.data[0].date : null,
+        historicalData: historicalData,
+        details: fundDetails // Include the full response for additional details
+      };
+      
+      return res.json(fundData);
+    } catch (error) {
+      console.error(`Error fetching direct API data for scheme ${schemeCode}:`, error);
+      // Fall back to middleware approach if direct API fails
     }
-
-    // If no recent data, fetch from external API
-    const [detailsResponse, navResponse] = await Promise.all([
-      axios.get(`https://api.mfapi.in/mf/${schemeCode}`),
-      axios.get(`https://api.mfapi.in/mf/${schemeCode}/latest`)
-    ]);
-
+    
+    // Fallback to middleware approach
+    console.log('Falling back to middleware approach');
+    const fundDetails = await mutualFundApi.getFundBySchemeCode(schemeCode);
+    const historicalData = await mutualFundApi.getHistoricalData(schemeCode, duration);
+    
+    // Create a response object with all the necessary data
     const fundData = {
       schemeCode,
-      name: detailsResponse.data.meta.scheme_name,
-      category: detailsResponse.data.meta.scheme_category,
-      latestNav: navResponse.data.data[0].nav,
-      navDate: navResponse.data.data[0].date,
-      fundHouse: detailsResponse.data.meta.fund_house,
-      details: detailsResponse.data
+      name: fundDetails.meta.scheme_name,
+      category: fundDetails.meta.scheme_category || 'N/A',
+      latestNav: historicalData.length > 0 ? historicalData[historicalData.length - 1].nav : 0,
+      navDate: historicalData.length > 0 ? historicalData[historicalData.length - 1].date : null,
+      fundHouse: fundDetails.meta.fund_house || 'N/A',
+      historicalData,
+      details: fundDetails
     };
-
-    // Save to database for future use
-    await MutualFund.upsert(fundData);
-
-    // Get historical data for charts
-    const historicalData = await getHistoricalDataFromAPI(schemeCode, duration);
-
-    res.json({
-      ...fundData,
-      historicalData
-    });
+    
+    res.json(fundData);
   } catch (err) {
     console.error('Error fetching mutual fund details:', err);
     next(err);
   }
 });
 
-// Helper function to get historical data
-async function getHistoricalDataFromAPI(schemeCode, duration) {
-  try {
-    const durationMap = {
-      '1m': 30,
-      '3m': 90,
-      '6m': 180,
-      '1y': 365,
-      '3y': 365 * 3,
-      '5y': 365 * 5,
-      '10y': 365 * 10
-    };
 
-    const count = durationMap[duration] || 365; // Default to 1 year
-    const response = await axios.get(`https://api.mfapi.in/mf/${schemeCode}?count=${count}`);
+
+// @route   GET api/mutual-funds/compare
+// @desc    Compare multiple mutual funds
+// @access  Public
+router.get('/compare', async (req, res, next) => {
+  try {
+    const { schemeCodes, duration = '1y' } = req.query;
     
-    return response.data.data
-      .map(item => ({
-        date: item.date,
-        nav: parseFloat(item.nav)
-      }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-  } catch (error) {
-    console.error('Error fetching historical data:', error);
-    return [];
+    if (!schemeCodes) {
+      return res.status(400).json({ msg: 'Scheme codes are required' });
+    }
+    
+    // Parse scheme codes from comma-separated string
+    const schemeCodeArray = schemeCodes.split(',').map(code => code.trim());
+    
+    if (schemeCodeArray.length < 2) {
+      return res.status(400).json({ msg: 'At least two scheme codes are required for comparison' });
+    }
+    
+    // Use the middleware to compare funds
+    const results = await mutualFundApi.compareFunds(schemeCodeArray, duration);
+    
+    res.json(results);
+  } catch (err) {
+    console.error('Error comparing mutual funds:', err);
+    next(err);
   }
-}
+});
 
 module.exports = router;

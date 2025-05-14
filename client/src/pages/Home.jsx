@@ -1,0 +1,256 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { getTopFunds, searchFunds, compareFunds } from '../api/mutualFunds';
+import './Home.css';
+
+const Home = () => {
+  const navigate = useNavigate();
+  const [topPortfolios, setTopPortfolios] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedFunds, setSelectedFunds] = useState([]);
+  const [compareMode, setCompareMode] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  useEffect(() => {
+    fetchTopPortfolios();
+  }, []);
+  
+  // Add click outside handler to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      const searchContainer = document.querySelector('.search-input-container');
+      if (searchContainer && !searchContainer.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
+
+  const fetchTopPortfolios = async () => {
+    try {
+      // Using the updated getTopFunds function that directly calls the mutual fund API
+      const data = await getTopFunds();
+      console.log('Fetched top funds:', data);
+      setTopPortfolios(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching top portfolios:', error);
+      setLoading(false);
+    }
+  };
+
+  // Handle input change and fetch suggestions
+  const handleSearchInputChange = async (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    
+    if (query.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    
+    try {
+      setSearchLoading(true);
+      // Get all funds and filter by query
+      const data = await searchFunds(query);
+      setSuggestions(data.slice(0, 10)); // Limit to 10 suggestions
+      setShowSuggestions(true);
+      setSearchLoading(false);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSearchLoading(false);
+    }
+  };
+  
+  // Handle search form submission
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    try {
+      const data = await searchFunds(searchQuery);
+      setSearchResults(data);
+      setShowSuggestions(false);
+    } catch (error) {
+      console.error('Error searching portfolios:', error);
+    }
+  };
+  
+  // Handle suggestion selection
+  const handleSelectSuggestion = (suggestion) => {
+    setSearchQuery(suggestion.schemeName);
+    setShowSuggestions(false);
+    navigate(`/portfolio/${suggestion.schemeCode}`);
+  };
+  
+  const toggleFundSelection = (fund) => {
+    if (!compareMode) return;
+    
+    setSelectedFunds(prev => {
+      // Check if fund is already selected
+      const isSelected = prev.some(f => f.schemeCode === fund.schemeCode);
+      
+      if (isSelected) {
+        // Remove from selection
+        return prev.filter(f => f.schemeCode !== fund.schemeCode);
+      } else {
+        // Add to selection (limit to 3 funds)
+        if (prev.length >= 3) {
+          alert('You can only compare up to 3 funds at a time');
+          return prev;
+        }
+        return [...prev, fund];
+      }
+    });
+  };
+  
+  const handleCompare = () => {
+    if (selectedFunds.length < 2) {
+      alert('Please select at least 2 funds to compare');
+      return;
+    }
+    
+    const schemeCodes = selectedFunds.map(fund => fund.schemeCode).join(',');
+    navigate(`/compare?funds=${schemeCodes}`);
+  };
+  
+  const toggleCompareMode = () => {
+    setCompareMode(!compareMode);
+    if (compareMode) {
+      // Exiting compare mode, clear selections
+      setSelectedFunds([]);
+    }
+  };
+
+  return (
+    <div className="home-container">
+      <section className="hero-section">
+        <h1>Welcome to Mutual Fund Analyzer</h1>
+        <p>Analyze and track your favorite mutual fund portfolios</p>
+        
+        <div className="search-section">
+          <form onSubmit={handleSearch} className="search-form">
+            <div className="search-input-container">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchInputChange}
+                placeholder="Search for mutual funds..."
+                className="search-input"
+                autoComplete="off"
+              />
+              {searchLoading && <div className="search-spinner"></div>}
+              
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="search-suggestions">
+                  {suggestions.map((suggestion) => (
+                    <div 
+                      key={suggestion.schemeCode} 
+                      className="suggestion-item"
+                      onClick={() => handleSelectSuggestion(suggestion)}
+                    >
+                      <div className="suggestion-name">{suggestion.schemeName}</div>
+                      <div className="suggestion-code">Code: {suggestion.schemeCode}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button type="submit" className="search-button">Search</button>
+          </form>
+        </div>
+        
+        <div className="compare-controls">
+          <button 
+            className={`compare-toggle ${compareMode ? 'active' : ''}`}
+            onClick={toggleCompareMode}
+          >
+            {compareMode ? 'Cancel Compare' : 'Compare Funds'}
+          </button>
+          
+          {compareMode && (
+            <button 
+              className="compare-action" 
+              onClick={handleCompare}
+              disabled={selectedFunds.length < 2}
+            >
+              Compare Selected ({selectedFunds.length}/3)
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="top-portfolios-section">
+        <div className="section-header">
+          <h2>Random Mutual Funds</h2>
+          <button 
+            className="refresh-button" 
+            onClick={fetchTopPortfolios} 
+            disabled={loading}
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
+        </div>
+        {loading ? (
+          <div>Loading...</div>
+        ) : (
+          <div className="portfolios-grid">
+            {topPortfolios.map((portfolio) => (
+              <div 
+                key={portfolio.schemeCode} 
+                className={`portfolio-card ${compareMode && selectedFunds.some(f => f.schemeCode === portfolio.schemeCode) ? 'selected' : ''}`}
+                onClick={() => toggleFundSelection(portfolio)}
+              >
+                <h3>{portfolio.schemeName || portfolio.name}</h3>
+                <p>NAV: ₹{portfolio.latestNav && portfolio.latestNav !== 0 ? portfolio.latestNav.toFixed(2) : 'N/A'}</p>
+                <p>Category: {portfolio.category || 'N/A'}</p>
+                <p>Fund House: {portfolio.fundHouse || 'N/A'}</p>
+                {!compareMode && (
+                  <Link to={`/portfolio/${portfolio.schemeCode}`} className="analyze-button">
+                    Analyze
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {searchResults.length > 0 && (
+        <section className="search-results-section">
+          <h2>Search Results</h2>
+          <div className="portfolios-grid">
+            {searchResults.map((portfolio) => (
+              <div 
+                key={portfolio.schemeCode} 
+                className={`portfolio-card ${compareMode && selectedFunds.some(f => f.schemeCode === portfolio.schemeCode) ? 'selected' : ''}`}
+                onClick={() => toggleFundSelection(portfolio)}
+              >
+                <h3>{portfolio.schemeName || portfolio.name}</h3>
+                <p>NAV: ₹{portfolio.latestNav && portfolio.latestNav !== 0 ? portfolio.latestNav.toFixed(2) : 'N/A'}</p>
+                <p>Category: {portfolio.category || 'N/A'}</p>
+                <p>Fund House: {portfolio.fundHouse || 'N/A'}</p>
+                {!compareMode && (
+                  <Link to={`/portfolio/${portfolio.schemeCode}`} className="analyze-button">
+                    Analyze
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+};
+
+export default Home;

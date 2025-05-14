@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import Header from './components/Header';
+import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
+import Compare from './pages/Compare';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -25,20 +27,13 @@ const ProtectedRoute = ({ children }) => {
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/portfolio/:id" element={
-        <ProtectedRoute>
-          <Portfolio />
-        </ProtectedRoute>
-      } />
-      <Route path="/" element={<Navigate to="/login" />} />
-      <Route path="*" element={<Navigate to="/login" />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/portfolio/:id" element={<Portfolio />} />
+      <Route path="/compare" element={<Compare />} />
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
 }

@@ -18,6 +18,7 @@ const Header = () => {
         <div className="header-content">
           <Link to={currentUser ? "/dashboard" : "/login"} className="logo">Mutual Fund Analyzer</Link>
           <nav className="nav">
+            <Link to="/" className="nav-link">Home</Link>
             {currentUser ? (
               <>
                 <Link to="/dashboard" className="nav-link">Dashboard</Link>

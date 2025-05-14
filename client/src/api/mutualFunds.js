@@ -12,12 +12,27 @@ const MF_API_URL = config.mutualFundApiUrl;
  */
 export const searchFunds = async (query) => {
   try {
-    // Use the server-side search endpoint instead of direct API call
-    const response = await axios.get(`${API_URL}/mutual-funds/search?query=${encodeURIComponent(query)}`);
-    return response.data;
+    if (config.isProduction) {
+      // In production, search directly against the external API
+      const response = await axios.get(MF_API_URL);
+      const allFunds = response.data;
+      
+      // Filter funds by name (case-insensitive)
+      const queryLower = query.toLowerCase();
+      const filteredFunds = allFunds.filter(fund => 
+        fund.schemeName.toLowerCase().includes(queryLower)
+      ).slice(0, 20); // Limit to 20 results
+      
+      return filteredFunds;
+    } else {
+      // In development, use the server-side search endpoint
+      const response = await axios.get(`${API_URL}/mutual-funds/search?query=${encodeURIComponent(query)}`);
+      return response.data;
+    }
   } catch (error) {
     console.error('Error searching funds:', error);
-    throw error;
+    // Return empty array instead of throwing error
+    return [];
   }
 };
 
@@ -50,9 +65,48 @@ export const getLatestNav = async (schemeCode) => {
  */
 export const getFundDetails = async (schemeCode, duration = '1y') => {
   try {
-    // Use the server endpoint instead of direct API call to avoid CORS issues
-    const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}?duration=${duration}`);
-    return response.data;
+    if (config.isProduction) {
+      // In production, call the external API directly
+      const response = await axios.get(`${MF_API_URL}/${schemeCode}`);
+      const fundDetails = response.data;
+      
+      // Format the data for frontend use
+      const durationMap = {
+        '1m': 30,
+        '3m': 90,
+        '6m': 180,
+        '1y': 365,
+        '3y': 365 * 3,
+        '5y': 365 * 5,
+        '10y': 365 * 10
+      };
+      
+      // Process historical data
+      const dataCount = Math.min(durationMap[duration] || 365, fundDetails.data.length);
+      const historicalData = fundDetails.data
+        .slice(0, dataCount)
+        .map(item => ({
+          date: item.date,
+          nav: parseFloat(item.nav)
+        }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      // Create a formatted response
+      return {
+        schemeCode,
+        name: fundDetails.meta.scheme_name,
+        category: fundDetails.meta.scheme_category || 'N/A',
+        fundHouse: fundDetails.meta.fund_house || 'N/A',
+        latestNav: fundDetails.data[0] ? parseFloat(fundDetails.data[0].nav) : 0,
+        navDate: fundDetails.data[0] ? fundDetails.data[0].date : null,
+        historicalData: historicalData,
+        details: fundDetails
+      };
+    } else {
+      // In development, use the server endpoint
+      const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}?duration=${duration}`);
+      return response.data;
+    }
   } catch (error) {
     console.error(`Error fetching fund details for ${schemeCode}:`, error);
     
@@ -93,9 +147,72 @@ export const getFundHistory = async (schemeCode, duration = '1y') => {
  */
 export const getTopFunds = async () => {
   try {
-    // Use the server endpoint instead of direct API call to avoid CORS issues
-    const response = await axios.get(`${API_URL}/mutual-funds/top10`);
-    return response.data;
+    // In production, we'll use direct API calls to avoid CORS issues
+    if (config.isProduction) {
+      // For production, use direct calls to the external API
+      try {
+        // Get all funds first
+        const response = await axios.get(MF_API_URL);
+        const allFunds = response.data;
+        
+        // Select 10 random funds
+        const funds = [];
+        const totalFunds = allFunds.length;
+        const numFunds = Math.min(10, totalFunds);
+        
+        // Create a set to ensure we don't select the same fund twice
+        const selectedIndices = new Set();
+        
+        while (selectedIndices.size < numFunds) {
+          const randomIndex = Math.floor(Math.random() * totalFunds);
+          if (!selectedIndices.has(randomIndex)) {
+            selectedIndices.add(randomIndex);
+            funds.push(allFunds[randomIndex]);
+          }
+        }
+        
+        // Get details for each fund
+        const detailedFunds = await Promise.all(
+          funds.map(async (fund) => {
+            try {
+              const detailsResponse = await axios.get(`${MF_API_URL}/${fund.schemeCode}`);
+              const fundDetails = detailsResponse.data;
+              
+              return {
+                schemeCode: fund.schemeCode,
+                schemeName: fund.schemeName,
+                name: fund.schemeName,
+                category: fundDetails.meta?.scheme_category || 'N/A',
+                fundHouse: fundDetails.meta?.fund_house || 'N/A',
+                latestNav: fundDetails.data && fundDetails.data.length > 0 ? parseFloat(fundDetails.data[0].nav) : 0,
+                navDate: fundDetails.data && fundDetails.data.length > 0 ? fundDetails.data[0].date : null
+              };
+            } catch (error) {
+              console.error(`Error fetching details for fund ${fund.schemeCode}:`, error);
+              // Return basic info if details fetch fails
+              return {
+                schemeCode: fund.schemeCode,
+                schemeName: fund.schemeName,
+                name: fund.schemeName,
+                category: 'N/A',
+                fundHouse: 'N/A',
+                latestNav: 0,
+                navDate: null
+              };
+            }
+          })
+        );
+        
+        return detailedFunds;
+      } catch (error) {
+        console.error('Error with direct API call:', error);
+        throw error;
+      }
+    } else {
+      // In development, use the server endpoint
+      const response = await axios.get(`${API_URL}/mutual-funds/top10`);
+      return response.data;
+    }
   } catch (error) {
     console.error('Error fetching top funds:', error);
     // Return sample data if API call fails

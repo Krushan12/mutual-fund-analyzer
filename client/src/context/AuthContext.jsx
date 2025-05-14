@@ -1,11 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiClient, setAuthToken } from '../api/axiosConfig';
 import config from '../config';
-
-// Set base URL for all axios requests
-axios.defaults.baseURL = process.env.NODE_ENV === 'production' 
-  ? 'https://mutual-fund-analyzer.onrender.com'
-  : 'http://localhost:5000';
 
 // Create the auth context
 const AuthContext = createContext();
@@ -18,12 +13,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Set up axios defaults
+  // Set up auth token
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      axios.defaults.headers.common['x-auth-token'] = token;
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setAuthToken(token);
     }
   }, []);
 
@@ -39,16 +33,16 @@ export const AuthProvider = ({ children }) => {
         }
         
         // Set the token in axios headers
-        axios.defaults.headers.common['x-auth-token'] = token;
+        setAuthToken(token);
         
         // Verify token and get user data
-        const res = await axios.get('/api/auth/user');
+        const res = await apiClient.get('/auth/user');
         setCurrentUser(res.data);
         setLoading(false);
       } catch (err) {
         console.error('Auth check failed:', err);
         localStorage.removeItem('token');
-        delete axios.defaults.headers.common['x-auth-token'];
+        setAuthToken(null);
         setError(err.response?.data?.msg || 'Authentication failed');
         setLoading(false);
       }
@@ -61,7 +55,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       setError(null);
-      const res = await axios.post('/api/auth/login', { email, password });
+      const res = await apiClient.post('/auth/login', { email, password });
       const token = res.data.token;
       
       // Save token to localStorage
@@ -92,7 +86,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (name, email, password) => {
     try {
       setError(null);
-      const res = await axios.post('/api/auth/register', { name, email, password });
+      const res = await apiClient.post('/auth/register', { name, email, password });
       const token = res.data.token;
       
       // Save token to localStorage
@@ -120,8 +114,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
     
     // Clear auth headers
-    delete axios.defaults.headers.common['x-auth-token'];
-    delete axios.defaults.headers.common['Authorization'];
+    setAuthToken(null);
     
     // Clear user state
     setCurrentUser(null);

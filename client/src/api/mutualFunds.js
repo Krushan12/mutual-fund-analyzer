@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { apiClient, externalApiClient } from './axiosConfig';
 import config from '../config';
 
 // Get API URLs from config
@@ -14,7 +14,7 @@ export const searchFunds = async (query) => {
   try {
     if (config.isProduction) {
       // In production, search directly against the external API
-      const response = await axios.get(MF_API_URL);
+      const response = await externalApiClient.get(MF_API_URL);
       const allFunds = response.data;
       
       // Filter funds by name (case-insensitive)
@@ -26,7 +26,7 @@ export const searchFunds = async (query) => {
       return filteredFunds;
     } else {
       // In development, use the server-side search endpoint
-      const response = await axios.get(`${API_URL}/mutual-funds/search?query=${encodeURIComponent(query)}`);
+      const response = await apiClient.get(`/mutual-funds/search?query=${encodeURIComponent(query)}`);
       return response.data;
     }
   } catch (error) {
@@ -43,7 +43,7 @@ export const searchFunds = async (query) => {
  */
 export const getLatestNav = async (schemeCode) => {
   try {
-    const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}`);
+    const response = await apiClient.get(`/mutual-funds/${schemeCode}`);
     return {
       latestNav: response.data.latestNav,
       navDate: response.data.navDate,
@@ -67,7 +67,7 @@ export const getFundDetails = async (schemeCode, duration = '1y') => {
   try {
     if (config.isProduction) {
       // In production, call the external API directly
-      const response = await axios.get(`${MF_API_URL}/${schemeCode}`);
+      const response = await externalApiClient.get(`${MF_API_URL}/${schemeCode}`);
       const fundDetails = response.data;
       
       // Format the data for frontend use
@@ -104,7 +104,7 @@ export const getFundDetails = async (schemeCode, duration = '1y') => {
       };
     } else {
       // In development, use the server endpoint
-      const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}?duration=${duration}`);
+      const response = await apiClient.get(`/mutual-funds/${schemeCode}?duration=${duration}`);
       return response.data;
     }
   } catch (error) {
@@ -133,7 +133,7 @@ export const getFundDetails = async (schemeCode, duration = '1y') => {
 export const getFundHistory = async (schemeCode, duration = '1y') => {
   try {
     // Use the server endpoint to get fund details
-    const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}?duration=${duration}`);
+    const response = await apiClient.get(`/mutual-funds/history/${schemeCode}?duration=${duration}`);
     return response.data.historicalData || [];
   } catch (error) {
     console.error('Error fetching fund history:', error);
@@ -152,7 +152,7 @@ export const getTopFunds = async () => {
       // For production, use direct calls to the external API
       try {
         // Get all funds first
-        const response = await axios.get(MF_API_URL);
+        const response = await externalApiClient.get(MF_API_URL);
         const allFunds = response.data;
         
         // Select 10 random funds
@@ -175,7 +175,7 @@ export const getTopFunds = async () => {
         const detailedFunds = await Promise.all(
           funds.map(async (fund) => {
             try {
-              const detailsResponse = await axios.get(`${MF_API_URL}/${fund.schemeCode}`);
+              const detailsResponse = await externalApiClient.get(`${MF_API_URL}/${fund.schemeCode}`);
               const fundDetails = detailsResponse.data;
               
               return {
@@ -210,7 +210,7 @@ export const getTopFunds = async () => {
       }
     } else {
       // In development, use the server endpoint
-      const response = await axios.get(`${API_URL}/mutual-funds/top10`);
+      const response = await apiClient.get(`/mutual-funds/top10`);
       return response.data;
     }
   } catch (error) {
@@ -284,7 +284,7 @@ export const compareFunds = async (schemeCodes, duration = '1y') => {
     }
     
     // Use the server endpoint for comparison
-    const response = await axios.get(`${API_URL}/mutual-funds/compare?schemeCodes=${schemeCodeArray.join(',')}&duration=${duration}`);
+    const response = await apiClient.get(`/mutual-funds/compare?schemeCodes=${schemeCodeArray.join(',')}&duration=${duration}`);
     return response.data;
   } catch (error) {
     console.error('Error comparing funds:', error);

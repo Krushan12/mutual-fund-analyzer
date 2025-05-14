@@ -4,6 +4,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement,
 import axios from 'axios';
 import { searchFunds, getLatestNav } from '../api/mutualFunds';
 import { useAuth } from '../context/AuthContext';
+import config from '../config';
 import './PortfolioManager.css';
 
 // Register Chart.js components
@@ -110,7 +111,7 @@ const PortfolioManager = () => {
       }
       
       // Make authenticated API call to fetch portfolios
-      const response = await axios.get('http://localhost:5000/api/portfolios', {
+      const response = await axios.get(`${config.apiUrl}/portfolios`, {
         headers: {
           'x-auth-token': token,
           'Authorization': `Bearer ${token}`
@@ -419,7 +420,7 @@ const PortfolioManager = () => {
       };
       
       // First create the portfolio
-      const portfolioResponse = await axios.post('http://localhost:5000/api/portfolios', {
+      const portfolioResponse = await axios.post(`${config.apiUrl}/portfolios`, {
         name: formData.portfolioName,
         description: formData.description
       }, { headers });
@@ -428,7 +429,7 @@ const PortfolioManager = () => {
       
       // Then add each holding to the portfolio
       for (const holding of formData.holdings) {
-        await axios.post(`http://localhost:5000/api/portfolios/${portfolioId}/holdings`, {
+        await axios.post(`${config.apiUrl}/portfolios/${portfolioId}/holdings`, {
           schemeCode: holding.schemeCode,
           units: holding.units,
           buyPrice: holding.buyPrice,
@@ -480,7 +481,7 @@ const PortfolioManager = () => {
       }
       
       // Call the API to delete the portfolio with authentication headers
-      await axios.delete(`http://localhost:5000/api/portfolios/${portfolioId}`, {
+      await axios.delete(`${config.apiUrl}/portfolios/${portfolioId}`, {
         headers: {
           'x-auth-token': token,
           'Authorization': `Bearer ${token}`

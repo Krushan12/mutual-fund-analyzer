@@ -1,7 +1,9 @@
 import axios from 'axios';
+import config from '../config';
 
-// Direct API URL for mutual funds
-const MF_API_URL = 'https://api.mfapi.in/mf';
+// Get API URLs from config
+const API_URL = config.apiUrl;
+const MF_API_URL = config.mutualFundApiUrl;
 
 /**
  * Search mutual funds by name
@@ -11,7 +13,7 @@ const MF_API_URL = 'https://api.mfapi.in/mf';
 export const searchFunds = async (query) => {
   try {
     // Use the server-side search endpoint instead of direct API call
-    const response = await axios.get(`http://localhost:5000/api/mutual-funds/search?query=${encodeURIComponent(query)}`);
+    const response = await axios.get(`${API_URL}/mutual-funds/search?query=${encodeURIComponent(query)}`);
     return response.data;
   } catch (error) {
     console.error('Error searching funds:', error);
@@ -26,7 +28,7 @@ export const searchFunds = async (query) => {
  */
 export const getLatestNav = async (schemeCode) => {
   try {
-    const response = await axios.get(`http://localhost:5000/api/mutual-funds/${schemeCode}`);
+    const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}`);
     return {
       latestNav: response.data.latestNav,
       navDate: response.data.navDate,
@@ -49,7 +51,7 @@ export const getLatestNav = async (schemeCode) => {
 export const getFundDetails = async (schemeCode, duration = '1y') => {
   try {
     // Use the server endpoint instead of direct API call to avoid CORS issues
-    const response = await axios.get(`http://localhost:5000/api/mutual-funds/${schemeCode}?duration=${duration}`);
+    const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}?duration=${duration}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching fund details for ${schemeCode}:`, error);
@@ -77,7 +79,7 @@ export const getFundDetails = async (schemeCode, duration = '1y') => {
 export const getFundHistory = async (schemeCode, duration = '1y') => {
   try {
     // Use the server endpoint to get fund details
-    const response = await axios.get(`http://localhost:5000/api/mutual-funds/${schemeCode}?duration=${duration}`);
+    const response = await axios.get(`${API_URL}/mutual-funds/${schemeCode}?duration=${duration}`);
     return response.data.historicalData || [];
   } catch (error) {
     console.error('Error fetching fund history:', error);
@@ -92,7 +94,7 @@ export const getFundHistory = async (schemeCode, duration = '1y') => {
 export const getTopFunds = async () => {
   try {
     // Use the server endpoint instead of direct API call to avoid CORS issues
-    const response = await axios.get('http://localhost:5000/api/mutual-funds/top10');
+    const response = await axios.get(`${API_URL}/mutual-funds/top10`);
     return response.data;
   } catch (error) {
     console.error('Error fetching top funds:', error);
@@ -165,7 +167,7 @@ export const compareFunds = async (schemeCodes, duration = '1y') => {
     }
     
     // Use the server endpoint for comparison
-    const response = await axios.get(`http://localhost:5000/api/mutual-funds/compare?schemeCodes=${schemeCodeArray.join(',')}&duration=${duration}`);
+    const response = await axios.get(`${API_URL}/mutual-funds/compare?schemeCodes=${schemeCodeArray.join(',')}&duration=${duration}`);
     return response.data;
   } catch (error) {
     console.error('Error comparing funds:', error);

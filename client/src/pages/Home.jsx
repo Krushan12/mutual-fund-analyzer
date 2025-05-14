@@ -36,9 +36,14 @@ const Home = () => {
 
   const fetchTopPortfolios = async () => {
     try {
+      // Set loading to true when starting the fetch
+      setLoading(true);
+      
       // Using the updated getTopFunds function that directly calls the mutual fund API
       const data = await getTopFunds();
       console.log('Fetched top funds:', data);
+      
+      // Update the state with the new data
       setTopPortfolios(data);
       setLoading(false);
     } catch (error) {

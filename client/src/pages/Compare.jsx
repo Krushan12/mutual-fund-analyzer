@@ -40,13 +40,29 @@ const Compare = () => {
           return;
         }
         
-        const data = await compareFunds(fundParams, duration);
+        let data = await compareFunds(fundParams, duration);
+        
+        // Ensure data is an array
+        if (!Array.isArray(data)) {
+          console.warn('Comparison data is not an array, converting to array format');
+          // If data is not an array, try to convert it or create a default array
+          if (data && typeof data === 'object') {
+            // If it's an object, wrap it in an array
+            data = [data];
+          } else {
+            // If it's neither an array nor an object, create an empty array
+            data = [];
+          }
+        }
+        
         setFunds(data);
         
-        // Prepare chart data
-        prepareChartData(data);
-        // Calculate performance metrics
-        calculatePerformanceMetrics(data);
+        // Prepare chart data only if we have valid data
+        if (data.length > 0) {
+          prepareChartData(data);
+          // Calculate performance metrics
+          calculatePerformanceMetrics(data);
+        }
         
         setLoading(false);
       } catch (err) {
@@ -60,14 +76,19 @@ const Compare = () => {
   }, [location.search, duration]);
 
   const prepareChartData = (fundsData) => {
-    if (!fundsData || fundsData.length === 0) return;
+    if (!fundsData || !Array.isArray(fundsData) || fundsData.length === 0) return;
     
     // Get all unique dates across all funds
     const allDates = new Set();
     fundsData.forEach(fund => {
-      fund.historicalData.forEach(item => {
-        allDates.add(item.date);
-      });
+      // Check if fund and historicalData exist and historicalData is an array
+      if (fund && fund.historicalData && Array.isArray(fund.historicalData)) {
+        fund.historicalData.forEach(item => {
+          if (item && item.date) {
+            allDates.add(item.date);
+          }
+        });
+      }
     });
     
     // Sort dates chronologically
@@ -81,9 +102,14 @@ const Compare = () => {
       
       // Create a map of date to NAV for quick lookup
       const dateNavMap = {};
-      fund.historicalData.forEach(item => {
-        dateNavMap[item.date] = item.nav;
-      });
+      // Check if historicalData exists and is an array
+      if (fund.historicalData && Array.isArray(fund.historicalData)) {
+        fund.historicalData.forEach(item => {
+          if (item && item.date && item.nav !== undefined) {
+            dateNavMap[item.date] = item.nav;
+          }
+        });
+      }
       
       // For each date, get the NAV if available, otherwise null
       const navValues = sortedDates.map(date => dateNavMap[date] || null);
@@ -106,13 +132,13 @@ const Compare = () => {
   };
 
   const calculatePerformanceMetrics = (fundsData) => {
-    if (!fundsData || fundsData.length === 0) return;
+    if (!fundsData || !Array.isArray(fundsData) || fundsData.length === 0) return;
     
     const metrics = fundsData.map(fund => {
-      const historicalData = fund.historicalData;
-      if (historicalData.length < 2) {
+      // Check if fund and historicalData exist and are valid
+      if (!fund || !fund.historicalData || !Array.isArray(fund.historicalData)) {
         return {
-          name: fund.name,
+          name: fund?.name || 'Unknown Fund',
           returns: {
             oneMonth: 'N/A',
             threeMonths: 'N/A',
@@ -120,7 +146,22 @@ const Compare = () => {
             oneYear: 'N/A'
           },
           volatility: 'N/A',
-          latestNav: historicalData.length > 0 ? historicalData[0].nav : 'N/A'
+          latestNav: 'N/A'
+        };
+      }
+      
+      const historicalData = fund.historicalData;
+      if (historicalData.length < 2) {
+        return {
+          name: fund.name || 'Unknown Fund',
+          returns: {
+            oneMonth: 'N/A',
+            threeMonths: 'N/A',
+            sixMonths: 'N/A',
+            oneYear: 'N/A'
+          },
+          volatility: 'N/A',
+          latestNav: historicalData.length > 0 && historicalData[0].nav !== undefined ? historicalData[0].nav : 'N/A'
         };
       }
       
@@ -301,7 +342,7 @@ const Compare = () => {
                     {performanceData.map((fund, index) => (
                       <tr key={index}>
                         <td>{fund.name}</td>
-                        <td>₹{fund.latestNav.toFixed(2)}</td>
+                        <td>₹{typeof fund.latestNav === 'number' ? fund.latestNav.toFixed(2) : 'N/A'}</td>
                         <td className={fund.returns.oneMonth !== 'N/A' && parseFloat(fund.returns.oneMonth) >= 0 ? 'positive' : 'negative'}>
                           {fund.returns.oneMonth}
                         </td>

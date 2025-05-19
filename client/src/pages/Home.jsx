@@ -10,13 +10,16 @@ const Home = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedFunds, setSelectedFunds] = useState([]);
-  const [compareMode, setCompareMode] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
 
+  // Load initial data only once when the component mounts
   useEffect(() => {
-    fetchTopPortfolios();
+    // Check if we already have data in state
+    if (topPortfolios.length === 0) {
+      fetchTopPortfolios();
+    }
   }, []);
   
   // Add click outside handler to close suggestions
@@ -98,8 +101,6 @@ const Home = () => {
   };
   
   const toggleFundSelection = (fund) => {
-    if (!compareMode) return;
-    
     setSelectedFunds(prev => {
       // Check if fund is already selected
       const isSelected = prev.some(f => f.schemeCode === fund.schemeCode);
@@ -126,14 +127,6 @@ const Home = () => {
     
     const schemeCodes = selectedFunds.map(fund => fund.schemeCode).join(',');
     navigate(`/compare?funds=${schemeCodes}`);
-  };
-  
-  const toggleCompareMode = () => {
-    setCompareMode(!compareMode);
-    if (compareMode) {
-      // Exiting compare mode, clear selections
-      setSelectedFunds([]);
-    }
   };
 
   return (
@@ -164,6 +157,7 @@ const Home = () => {
                       onClick={() => handleSelectSuggestion(suggestion)}
                     >
                       <div className="suggestion-name">{suggestion.schemeName}</div>
+                      <div className="suggestion-fund-house">{suggestion.fundHouse || 'Unknown Fund House'}</div>
                       <div className="suggestion-code">Code: {suggestion.schemeCode}</div>
                     </div>
                   ))}
@@ -176,21 +170,12 @@ const Home = () => {
         
         <div className="compare-controls">
           <button 
-            className={`compare-toggle ${compareMode ? 'active' : ''}`}
-            onClick={toggleCompareMode}
+            className="compare-action" 
+            onClick={handleCompare}
+            disabled={selectedFunds.length < 2}
           >
-            {compareMode ? 'Cancel Compare' : 'Compare Funds'}
+            Compare Selected ({selectedFunds.length}/3)
           </button>
-          
-          {compareMode && (
-            <button 
-              className="compare-action" 
-              onClick={handleCompare}
-              disabled={selectedFunds.length < 2}
-            >
-              Compare Selected ({selectedFunds.length}/3)
-            </button>
-          )}
         </div>
       </section>
 
@@ -212,14 +197,14 @@ const Home = () => {
             {topPortfolios.map((portfolio) => (
               <div 
                 key={portfolio.schemeCode} 
-                className={`portfolio-card ${compareMode && selectedFunds.some(f => f.schemeCode === portfolio.schemeCode) ? 'selected' : ''}`}
+                className={`portfolio-card ${selectedFunds.some(f => f.schemeCode === portfolio.schemeCode) ? 'selected' : ''}`}
                 onClick={() => toggleFundSelection(portfolio)}
               >
                 <h3>{portfolio.schemeName || portfolio.name}</h3>
                 <p>NAV: ₹{portfolio.latestNav && portfolio.latestNav !== 0 ? portfolio.latestNav.toFixed(2) : 'N/A'}</p>
                 <p>Category: {portfolio.category || 'N/A'}</p>
                 <p>Fund House: {portfolio.fundHouse || 'N/A'}</p>
-                {!compareMode && (
+                {(
                   <Link to={`/portfolio/${portfolio.schemeCode}`} className="analyze-button">
                     Analyze
                   </Link>
@@ -237,14 +222,14 @@ const Home = () => {
             {searchResults.map((portfolio) => (
               <div 
                 key={portfolio.schemeCode} 
-                className={`portfolio-card ${compareMode && selectedFunds.some(f => f.schemeCode === portfolio.schemeCode) ? 'selected' : ''}`}
+                className={`portfolio-card ${selectedFunds.some(f => f.schemeCode === portfolio.schemeCode) ? 'selected' : ''}`}
                 onClick={() => toggleFundSelection(portfolio)}
               >
                 <h3>{portfolio.schemeName || portfolio.name}</h3>
                 <p>NAV: ₹{portfolio.latestNav && portfolio.latestNav !== 0 ? portfolio.latestNav.toFixed(2) : 'N/A'}</p>
                 <p>Category: {portfolio.category || 'N/A'}</p>
                 <p>Fund House: {portfolio.fundHouse || 'N/A'}</p>
-                {!compareMode && (
+                {(
                   <Link to={`/portfolio/${portfolio.schemeCode}`} className="analyze-button">
                     Analyze
                   </Link>

@@ -8,6 +8,7 @@ import Compare from './pages/Compare';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -41,14 +42,16 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="app">
-          <Header />
-          <main className="main-content">
-            <AppRoutes />
-          </main>
-        </div>
-      </Router>
+      <ThemeProvider>
+        <Router>
+          <div className="app">
+            <Header />
+            <main className="main-content">
+              <AppRoutes />
+            </main>
+          </div>
+        </Router>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

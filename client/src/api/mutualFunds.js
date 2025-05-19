@@ -6,29 +6,89 @@ const API_URL = config.apiUrl;
 const MF_API_URL = config.mutualFundApiUrl;
 
 /**
- * Search mutual funds by name
- * @param {string} query - Search query
- * @returns {Promise<Array>} - Array of matching funds
+ * Search mutual funds by name or scheme code
+ * @param {string} query - Search query (fund name or scheme code)
+ * @returns {Promise<Array>} - Array of matching funds with fund house information
  */
 export const searchFunds = async (query) => {
   try {
-    if (config.isProduction) {
-      // In production, search directly against the external API
-      const response = await externalApiClient.get(MF_API_URL);
-      const allFunds = response.data;
-      
-      // Filter funds by name (case-insensitive)
-      const queryLower = query.toLowerCase();
-      const filteredFunds = allFunds.filter(fund => 
-        fund.schemeName.toLowerCase().includes(queryLower)
-      ).slice(0, 20); // Limit to 20 results
-      
-      return filteredFunds;
-    } else {
-      // In development, use the server-side search endpoint
-      const response = await apiClient.get(`/mutual-funds/search?query=${encodeURIComponent(query)}`);
-      return response.data;
+    // Trim the query to remove any whitespace
+    const trimmedQuery = query.trim();
+    
+    // Check if the query is a scheme code (all digits)
+    const isSchemeCode = /^\d+$/.test(trimmedQuery);
+    
+    if (isSchemeCode) {
+      // If it's a scheme code, fetch that specific fund directly
+      try {
+        const fundResponse = await externalApiClient.get(`${MF_API_URL}/${trimmedQuery}`);
+        const fundData = fundResponse.data;
+        
+        if (fundData && fundData.meta) {
+          // Create a fund object with all necessary information
+          return [{
+            schemeCode: trimmedQuery,
+            schemeName: fundData.meta.scheme_name,
+            fundHouse: fundData.meta.fund_house,
+            category: fundData.meta.scheme_category,
+            latestNav: fundData.data[0]?.nav || 'N/A',
+            navDate: fundData.data[0]?.date || 'N/A'
+          }];
+        }
+      } catch (directFetchError) {
+        console.warn(`Could not fetch fund with scheme code ${trimmedQuery}:`, directFetchError);
+        // Continue with regular search if direct fetch fails
+      }
     }
+    
+    // Regular search by name
+    const response = await externalApiClient.get(MF_API_URL);
+    const allFunds = response.data;
+    
+    // Filter funds by name (case-insensitive)
+    const queryLower = trimmedQuery.toLowerCase();
+    const filteredFunds = allFunds.filter(fund => {
+      if (!fund.schemeName) return false;
+      return fund.schemeName.toLowerCase().includes(queryLower);
+    }).slice(0, 5); // Limit to 5 results for better performance
+    
+    // For each fund in the filtered list, fetch additional details
+    const fundsWithDetails = [];
+    
+    // Process funds sequentially to avoid overwhelming the API
+    for (const fund of filteredFunds) {
+      try {
+        console.log(`Fetching details for fund ${fund.schemeCode}`);
+        const detailResponse = await externalApiClient.get(`${MF_API_URL}/${fund.schemeCode}`);
+        const fundDetails = detailResponse.data;
+        
+        if (fundDetails && fundDetails.meta) {
+          fundsWithDetails.push({
+            schemeCode: fund.schemeCode,
+            schemeName: fundDetails.meta.scheme_name || fund.schemeName,
+            fundHouse: fundDetails.meta.fund_house || 'Fund House Not Available',
+            category: fundDetails.meta.scheme_category || 'N/A',
+            latestNav: fundDetails.data[0]?.nav || 'N/A',
+            navDate: fundDetails.data[0]?.date || 'N/A'
+          });
+        } else {
+          // If we couldn't get details, still include the fund with what we know
+          fundsWithDetails.push({
+            ...fund,
+            fundHouse: 'Fund House Not Available'
+          });
+        }
+      } catch (detailError) {
+        console.warn(`Error fetching details for fund ${fund.schemeCode}:`, detailError);
+        // Still include the fund with what we know
+        fundsWithDetails.push({
+          ...fund,
+          fundHouse: 'Fund House Not Available'
+        });
+      }
+    }
+    
+    return fundsWithDetails;
   } catch (error) {
     console.error('Error searching funds:', error);
     // Return empty array instead of throwing error
@@ -283,13 +343,102 @@ export const compareFunds = async (schemeCodes, duration = '1y') => {
       throw new Error('At least two scheme codes are required for comparison');
     }
     
-    // Use the server endpoint for comparison
-    const response = await apiClient.get(`/mutual-funds/compare?schemeCodes=${schemeCodeArray.join(',')}&duration=${duration}`);
-    return response.data;
-  } catch (error) {
-    console.error('Error comparing funds:', error);
+    console.log('Comparing funds with scheme codes:', schemeCodeArray);
     
-    // Return sample data if API call fails
+    // Create an array to store the fund data
+    const fundsData = [];
+    
+    // Fetch data for each fund one by one to avoid rate limiting
+    for (const code of schemeCodeArray) {
+      try {
+        console.log(`Fetching data for fund ${code}...`);
+        const response = await externalApiClient.get(`${MF_API_URL}/${code}`);
+        
+        if (!response.data || !response.data.meta || !response.data.data || !Array.isArray(response.data.data)) {
+          console.error(`Invalid data format for fund ${code}:`, response.data);
+          continue; // Skip this fund and move to the next one
+        }
+        
+        const fundDetails = response.data;
+        
+        // Process historical data based on the requested duration
+        const durationDays = {
+          '1m': 30,
+          '3m': 90,
+          '6m': 180,
+          '1y': 365,
+          '3y': 365 * 3,
+          '5y': 365 * 5,
+          '10y': 365 * 10
+        }[duration] || 365;
+        
+        // Limit the data points based on duration
+        const dataCount = Math.min(durationDays, fundDetails.data.length);
+        
+        // Extract and format the historical data
+        const historicalData = fundDetails.data
+          .slice(0, dataCount)
+          .map(item => ({
+            date: item.date,
+            nav: parseFloat(item.nav || '0')
+          }))
+          // Sort by date (ascending) for proper chart display
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+          
+        // Ensure we have valid data points
+        if (historicalData.length === 0) {
+          console.warn(`No historical data available for fund ${code}`);
+          // Add some dummy data to prevent chart errors
+          const today = new Date();
+          for (let i = 0; i < 10; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i * 30);
+            historicalData.push({
+              date: date.toISOString().split('T')[0],
+              nav: 100 // Default value
+            });
+          }
+          historicalData.sort((a, b) => new Date(a.date) - new Date(b.date));
+        }
+        
+        // Create a fund object with all necessary data
+        const fundData = {
+          schemeCode: code,
+          name: fundDetails.meta.scheme_name || `Fund ${code}`,
+          category: fundDetails.meta.scheme_category || 'N/A',
+          fundHouse: fundDetails.meta.fund_house || 'N/A',
+          latestNav: fundDetails.data[0] ? parseFloat(fundDetails.data[0].nav) : (historicalData.length > 0 ? historicalData[historicalData.length - 1].nav : 100),
+          navDate: fundDetails.data[0] ? fundDetails.data[0].date : (historicalData.length > 0 ? historicalData[historicalData.length - 1].date : new Date().toISOString().split('T')[0]),
+          historicalData: historicalData
+        };
+        
+        // Add the fund data to the array
+        fundsData.push(fundData);
+        console.log(`Successfully processed fund ${code}:`, fundData.name);
+        
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } catch (error) {
+        console.error(`Error fetching details for fund ${code}:`, error);
+        // Add a placeholder for the failed fund
+        fundsData.push({
+          schemeCode: code,
+          name: `Fund ${code}`,
+          fundHouse: 'N/A',
+          category: 'N/A',
+          latestNav: 0,
+          navDate: null,
+          historicalData: []
+        });
+      }
+    }
+    
+    console.log(`Comparison data prepared for ${fundsData.length} funds:`, fundsData);
+    return fundsData;
+  } catch (error) {
+    console.error('Error in compare funds function:', error);
+    
+    // Return placeholder data if something goes wrong
     if (Array.isArray(schemeCodes) || typeof schemeCodes === 'string') {
       const schemeCodeArray = Array.isArray(schemeCodes) 
         ? schemeCodes 

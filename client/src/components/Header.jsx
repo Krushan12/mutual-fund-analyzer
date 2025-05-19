@@ -13,7 +13,7 @@ const Header = () => {
   };
 
   return (
-    <header className="header">
+    <header className="header fade-in">
       <div className="container">
         <div className="header-content">
           <Link to={currentUser ? "/dashboard" : "/login"} className="logo">Mutual Fund Analyzer</Link>
